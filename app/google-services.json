@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "854042256206",
+    "project_id": "instant-messenger-54aca",
+    "storage_bucket": "instant-messenger-54aca.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:854042256206:android:905374863aa0d3489a741f",
+        "android_client_info": {
+          "package_name": "com.example.synctalk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdIsI1tK0h1iXMQSQYkZ1Z6o_7eHkpkCQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
