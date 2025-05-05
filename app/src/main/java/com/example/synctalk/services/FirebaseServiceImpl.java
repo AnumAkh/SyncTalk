@@ -1,7 +1,10 @@
 package com.example.synctalk.services;
 
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.util.Log;
+import android.widget.Toast;
+
 import com.example.synctalk.models.Message;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -10,6 +13,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
 
 import androidx.annotation.NonNull;
 
@@ -85,21 +89,55 @@ public class FirebaseServiceImpl implements FirebaseService {
 
     @Override
     public void uploadImage(Uri imageUri, OnImageUploadedListener listener) {
-        // Create a unique filename
-        String filename = "chat_images/" + UUID.randomUUID().toString();
-        StorageReference imageRef = storageReference.child(filename);
+        Toast.makeText(null, "Starting upload in service...", Toast.LENGTH_SHORT).show();
+        Log.d("FirebaseService", "Starting image upload: " + imageUri);
 
-        // Upload file
-        imageRef.putFile(imageUri)
-                .addOnSuccessListener(taskSnapshot -> {
-                    // Get download URL
-                    imageRef.getDownloadUrl().addOnSuccessListener(uri -> {
-                        String imageUrl = uri.toString();
-                        listener.onImageUploaded(imageUrl);
-                    });
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("FirebaseService", "Image upload failed", e);
-                });
+        // Create a storage reference
+        StorageReference fileRef = storageReference.child("chat_images/" + UUID.randomUUID().toString());
+
+        UploadTask uploadTask = fileRef.putFile(imageUri);
+
+        // Add progress listener
+        uploadTask.addOnProgressListener(taskSnapshot -> {
+            double progress = (100.0 * taskSnapshot.getBytesTransferred()) / taskSnapshot.getTotalByteCount();
+            Log.d("FirebaseService", "Upload progress: " + progress + "%");
+        });
+
+        // Handle success
+        uploadTask.addOnSuccessListener(taskSnapshot -> {
+            Log.d("FirebaseService", "Upload successful");
+
+            // Get the download URL
+            fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                String imageUrl = uri.toString();
+                Log.d("FirebaseService", "Download URL: " + imageUrl);
+                listener.onImageUploaded(imageUrl);
+            }).addOnFailureListener(e -> {
+                Log.e("FirebaseService", "Failed to get download URL", e);
+                listener.onImageUploaded(null); // Notify with null to indicate failure
+            });
+        });
+
+        // Handle failure
+        uploadTask.addOnFailureListener(e -> {
+            Log.e("FirebaseService", "Upload failed", e);
+            listener.onImageUploaded(null); // Notify with null to indicate failure
+        });
+    }
+
+    public Bitmap getResizedBitmap(Bitmap image, int maxSize) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+
+        float bitmapRatio = (float) width / (float) height;
+        if (bitmapRatio > 1) {
+            width = maxSize;
+            height = (int) (width / bitmapRatio);
+        } else {
+            height = maxSize;
+            width = (int) (height * bitmapRatio);
+        }
+
+        return Bitmap.createScaledBitmap(image, width, height, true);
     }
 }

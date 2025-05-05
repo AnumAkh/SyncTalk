@@ -1,12 +1,19 @@
 package com.example.synctalk.activities;
 
+import android.content.ContentResolver;
 import android.content.Intent;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.util.Log;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -20,6 +27,8 @@ import com.example.synctalk.services.FirebaseServiceImpl;
 import com.example.synctalk.services.WebSocketService;
 import com.example.synctalk.services.WebSocketServiceImpl;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -182,31 +191,92 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(Intent.createChooser(intent, "Select Image"), PICK_IMAGE_REQUEST);
     }
 
+    // Add this debug method to your MainActivity
+    private void logImageDetails(Uri imageUri) {
+        try {
+            ContentResolver contentResolver = getContentResolver();
+            String mimeType = contentResolver.getType(imageUri);
+            Cursor cursor = contentResolver.query(imageUri, null, null, null, null);
+            int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
+            cursor.moveToFirst();
+            long size = cursor.getLong(sizeIndex);
+            cursor.close();
+
+            Log.d("ImageDebug", "Selected image: " + imageUri.toString());
+            Log.d("ImageDebug", "MIME type: " + mimeType);
+            Log.d("ImageDebug", "File size: " + size + " bytes");
+        } catch (Exception e) {
+            Log.e("ImageDebug", "Error getting image details", e);
+        }
+    }
+
+    // Add this call to your onActivityResult method
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
             Uri imageUri = data.getData();
+            logImageDetails(imageUri);
+            Toast.makeText(this, "Image selected, uploading...", Toast.LENGTH_SHORT).show();
             uploadAndSendImage(imageUri);
         }
     }
-
     private void uploadAndSendImage(Uri imageUri) {
-        firebaseService.uploadImage(imageUri, imageUrl -> {
+        try {
+            // Show a loading indicator
+            Toast.makeText(this, "Processing image...", Toast.LENGTH_SHORT).show();
+
+            // Convert the image to Base64
+            InputStream inputStream = getContentResolver().openInputStream(imageUri);
+            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+
+            // Compress and resize the image to reduce size
+            Bitmap resizedBitmap = getResizedBitmap(bitmap, 800); // Max width/height 800px
+
+            // Convert to Base64
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, byteArrayOutputStream);
+            byte[] byteArray = byteArrayOutputStream.toByteArray();
+            String base64Image = "data:image/jpeg;base64," + Base64.encodeToString(byteArray, Base64.DEFAULT);
+
             // Create image message
             Message message = new Message();
             message.setSenderId(currentUserId);
-            message.setText(imageUrl);
+            message.setText(base64Image);
             message.setTimestamp(System.currentTimeMillis());
             message.setType("image");
 
-            // Send to Firebase
+            // Send to Firebase Realtime Database
             firebaseService.sendMessage(chatId, message);
 
-            // Send via WebSocket
-            webSocketService.sendMessage(message);
-        });
+            // Clear any resources
+            inputStream.close();
+            byteArrayOutputStream.close();
+
+            Toast.makeText(this, "Image sent!", Toast.LENGTH_SHORT).show();
+
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error processing image", e);
+            Toast.makeText(this, "Failed to process image", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // Helper method to resize images
+    public Bitmap getResizedBitmap(Bitmap image, int maxSize) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+
+        float bitmapRatio = (float) width / (float) height;
+        if (bitmapRatio > 1) {
+            width = maxSize;
+            height = (int) (width / bitmapRatio);
+        } else {
+            height = maxSize;
+            width = (int) (height * bitmapRatio);
+        }
+
+        return Bitmap.createScaledBitmap(image, width, height, true);
     }
 
     @Override

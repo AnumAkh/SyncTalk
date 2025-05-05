@@ -2,6 +2,9 @@ package com.example.synctalk.adapters;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Base64;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -158,21 +161,20 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
 
         void bind(Message message) {
-            // Load image using Glide
-            Glide.with(context)
-                    .load(message.getText())
-                    .placeholder(R.drawable.ic_image_placeholder)
-                    .error(R.drawable.ic_image_error)
-                    .into(messageImage);
-
             timeText.setText(formatTime(message.getTimestamp()));
 
-            // Add click listener to open full image
-            messageImage.setOnClickListener(v -> {
-                Intent intent = new Intent(context, ImageViewerActivity.class);
-                intent.putExtra("image_url", message.getText());
-                context.startActivity(intent);
-            });
+            if (message.getText().startsWith("data:image")) {
+                // It's a Base64 image
+                String base64Image = message.getText().substring(message.getText().indexOf(",") + 1);
+                byte[] decodedString = Base64.decode(base64Image, Base64.DEFAULT);
+                Bitmap decodedBitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+                messageImage.setImageBitmap(decodedBitmap);
+            } else {
+                // Try to load it as a URL (in case you switch to Storage later)
+                Glide.with(context)
+                        .load(message.getText())
+                        .into(messageImage);
+            }
         }
     }
 
