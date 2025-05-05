@@ -1,13 +1,22 @@
 package com.example.synctalk.activities;
 
+import android.Manifest;
+import android.app.ActivityManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.provider.Settings;
 import android.util.Base64;
 import android.util.Log;
 import android.widget.EditText;
@@ -16,6 +25,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -35,6 +48,8 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private static final int PICK_IMAGE_REQUEST = 1;
+    private static final int NOTIFICATION_PERMISSION_CODE = 123;
+
     private RecyclerView recyclerView;
     private EditText messageInput;
     private ImageButton sendButton;
@@ -63,11 +78,17 @@ public class MainActivity extends AppCompatActivity {
         attachButton = findViewById(R.id.attachButton);
         chatTitle = findViewById(R.id.chatTitle);
 
+        // Create notification channel
+        createNotificationChannel();
+
+        // Request notification permission
+        requestNotificationPermission();
+
         // Configure user identity based on device
         configureUserIdentity();
 
         // Initialize services
-        firebaseService = new FirebaseServiceImpl();
+        firebaseService = new FirebaseServiceImpl(this);
         webSocketService = new WebSocketServiceImpl(currentUserId);
 
         // Initialize message list and adapter
@@ -92,51 +113,40 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void configureUserIdentity() {
-        // Get complete device information for more reliable identification
-        String deviceModel = android.os.Build.MODEL;
-        String deviceManufacturer = android.os.Build.MANUFACTURER;
-        String deviceName = android.os.Build.DEVICE;
+        String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+        Log.d("DeviceInfo", "Android ID: " + androidId);
 
-        // For debugging - log the full device info
-        Log.d("DeviceInfo", "Model: " + deviceModel +
-                ", Manufacturer: " + deviceManufacturer +
-                ", Device Name: " + deviceName);
-
-        // Use exact model name comparison rather than contains()
-        if (deviceModel.equals("Pixel 8")) {
-            currentUserId = "user1"; // Anum
-            otherUserId = "user2"; // Aiman
-            if (chatTitle != null) {
-                chatTitle.setText("Chat with Aiman (as Anum)");
-            }
-        } else if (deviceModel.equals("Medium Phone API 36")) {
-            currentUserId = "user2"; // Aiman
-            otherUserId = "user1"; // Anum
-            if (chatTitle != null) {
-                chatTitle.setText("Chat with Anum (as Aiman)");
-            }
-        } else {
-            // Fallback logic - use any unique device identifier
-            // Using device name as a unique identifier
-            if (deviceName.hashCode() % 2 == 0) {
-                currentUserId = "user1"; // Anum
-                otherUserId = "user2"; // Aiman
-                if (chatTitle != null) {
-                    chatTitle.setText("Chat with Aiman (as Anum)");
-                }
-            } else {
+        // Hardcoded mapping for known Android IDs
+        switch (androidId) {
+            case "fe0c60f5648ae9fb":
                 currentUserId = "user2"; // Aiman
                 otherUserId = "user1"; // Anum
                 if (chatTitle != null) {
                     chatTitle.setText("Chat with Anum (as Aiman)");
                 }
-            }
+                break;
+            case "251a12153ed2e0e8":
+                currentUserId = "user1"; // Anum
+                otherUserId = "user2"; // Aiman
+                if (chatTitle != null) {
+                    chatTitle.setText("Chat with Aiman (as Anum)");
+                }
+                break;
+            default:
+                // Fallback (optional)
+                currentUserId = "user1"; // default
+                otherUserId = "user2";
+                if (chatTitle != null) {
+                    chatTitle.setText("Chat with Aiman (default user)");
+                }
+                break;
         }
 
-        // Log the final result
-        Log.d("UserIdentity", "Device: " + deviceModel +
+        Log.d("UserIdentity", "Android ID: " + androidId +
                 ", Assigned User: " + (currentUserId.equals("user1") ? "Anum" : "Aiman"));
     }
+
+
 
     private void loadMessages() {
         firebaseService.getMessages(chatId, messages -> {
@@ -149,16 +159,21 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupWebSocket() {
         // Connect to WebSocket server
-        Log.d(null, "going in web socket");
-        webSocketService.connect("wss://your-websocket-server.com");
+        Log.d("WebSocketSetup", "Connecting to WebSocket server");
+        webSocketService.connect("wss://cerulean-tulip-zone.glitch.me");
 
         // Listen for incoming messages
         webSocketService.setMessageListener(message -> {
-            // Only add if it's a message for this chat
             runOnUiThread(() -> {
+                Log.d("MessageReceived", "Got message from: " + message.getSenderId() + ", text: " + message.getText());
+
+                // Add message to the list
                 messageList.add(message);
                 messageAdapter.notifyItemInserted(messageList.size() - 1);
                 recyclerView.scrollToPosition(messageList.size() - 1);
+
+                // Always show notification for testing
+                showNotificationForMessage(message);
             });
         });
     }
@@ -222,6 +237,7 @@ public class MainActivity extends AppCompatActivity {
             uploadAndSendImage(imageUri);
         }
     }
+
     private void uploadAndSendImage(Uri imageUri) {
         try {
             // Show a loading indicator
@@ -250,6 +266,9 @@ public class MainActivity extends AppCompatActivity {
             // Send to Firebase Realtime Database
             firebaseService.sendMessage(chatId, message);
 
+            // Send via WebSocket for instant delivery
+            webSocketService.sendMessage(message);
+
             // Clear any resources
             inputStream.close();
             byteArrayOutputStream.close();
@@ -277,6 +296,94 @@ public class MainActivity extends AppCompatActivity {
         }
 
         return Bitmap.createScaledBitmap(image, width, height, true);
+    }
+
+    private void createNotificationChannel() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    "chat_channel",
+                    "Chat Notifications",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Notifications for new chat messages");
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        NOTIFICATION_PERMISSION_CODE);
+            }
+        }
+    }
+
+    private boolean isAppInForeground() {
+        ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        List<ActivityManager.RunningAppProcessInfo> appProcesses = activityManager.getRunningAppProcesses();
+        if (appProcesses == null) {
+            Log.d("AppState", "appProcesses is null, assuming app is NOT in foreground");
+            return false;
+        }
+
+        final String packageName = getPackageName();
+        for (ActivityManager.RunningAppProcessInfo appProcess : appProcesses) {
+            if (appProcess.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+                    && appProcess.processName.equals(packageName)) {
+                Log.d("AppState", "App IS in foreground");
+                return true;
+            }
+        }
+        Log.d("AppState", "App is NOT in foreground");
+        return false;
+    }
+
+    private void showNotificationForMessage(Message message) {
+        // Log message sender info for debugging
+        Log.d("Notification", "Message sender: '" + message.getSenderId() + "', currentUserId: '" + currentUserId + "'");
+        Log.d("Notification", "Are they equal? " + message.getSenderId().equals(currentUserId));
+
+        // Only show notification if message is from OTHER user (not self)
+        if (!message.getSenderId().equals(currentUserId)) {
+            Log.d("Notification", "Showing notification for message from other user");
+
+            String senderName = message.getSenderId().equals("user1") ? "Anum" : "Aiman";
+            String contentText = message.getType().equals("image") ? "📷 Image" : message.getText();
+
+            try {
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                PendingIntent pendingIntent = PendingIntent.getActivity(
+                        this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+
+                NotificationCompat.Builder builder = new NotificationCompat.Builder(this, "chat_channel")
+                        .setSmallIcon(R.drawable.ic_notification)
+                        .setContentTitle("Message from " + senderName)
+                        .setContentText(contentText)
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setContentIntent(pendingIntent)
+                        .setAutoCancel(true);
+
+                NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+
+                if (ActivityCompat.checkSelfPermission(this,
+                        Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                    notificationManager.notify(1, builder.build());
+                    Log.d("Notification", "Notification shown successfully");
+                } else {
+                    Log.e("Notification", "POST_NOTIFICATIONS permission not granted");
+                }
+            } catch (Exception e) {
+                Log.e("Notification", "Error showing notification", e);
+                e.printStackTrace();
+            }
+        } else {
+            Log.d("Notification", "NOT showing notification for message from self");
+        }
     }
 
     @Override

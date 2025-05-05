@@ -1,10 +1,17 @@
 package com.example.synctalk.services;
 
+import android.Manifest;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.example.synctalk.R;
+import com.example.synctalk.activities.MainActivity;
 import com.example.synctalk.models.Message;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -16,6 +23,9 @@ import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,8 +38,12 @@ public class FirebaseServiceImpl implements FirebaseService {
     private DatabaseReference databaseReference;
     private FirebaseStorage storage;
     private StorageReference storageReference;
+    private Context context;  // Added context variable
 
-    public FirebaseServiceImpl() {
+    // Updated constructor with context parameter
+    public FirebaseServiceImpl(Context context) {
+        this.context = context;
+
         // Initialize with correct URL for your region
         database = FirebaseDatabase.getInstance("https://instant-messenger-54aca-default-rtdb.asia-southeast1.firebasedatabase.app");
         databaseReference = database.getReference();
@@ -89,7 +103,9 @@ public class FirebaseServiceImpl implements FirebaseService {
 
     @Override
     public void uploadImage(Uri imageUri, OnImageUploadedListener listener) {
-        Toast.makeText(null, "Starting upload in service...", Toast.LENGTH_SHORT).show();
+        if (context != null) {
+            Toast.makeText(context, "Starting upload in service...", Toast.LENGTH_SHORT).show();
+        }
         Log.d("FirebaseService", "Starting image upload: " + imageUri);
 
         // Create a storage reference
@@ -140,4 +156,5 @@ public class FirebaseServiceImpl implements FirebaseService {
 
         return Bitmap.createScaledBitmap(image, width, height, true);
     }
+
 }

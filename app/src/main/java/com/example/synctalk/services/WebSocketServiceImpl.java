@@ -47,9 +47,11 @@ public class WebSocketServiceImpl implements WebSocketService {
                 }
             }
 
+            // In WebSocketServiceImpl.java
             @Override
             public void onMessage(WebSocket webSocket, String text) {
                 try {
+                    Log.d("WebSocket", "Received message: " + text);
                     JSONObject jsonMessage = new JSONObject(text);
 
                     if (jsonMessage.getString("type").equals("message")) {
@@ -59,11 +61,19 @@ public class WebSocketServiceImpl implements WebSocketService {
                         message.setSenderId(jsonMessage.getString("senderId"));
                         message.setText(jsonMessage.getString("text"));
                         message.setTimestamp(jsonMessage.getLong("timestamp"));
-                        message.setType(jsonMessage.getString("type"));
+                        message.setType(jsonMessage.optString("messageType", "text"));
 
-                        // Notify listener
-                        if (messageListener != null) {
-                            messageListener.onMessageReceived(message);
+                        Log.d("WebSocket", "Parsed message from: " + message.getSenderId() + ", my id: " + userId);
+
+                        // Don't notify for messages from self
+                        if (!message.getSenderId().equals(userId)) {
+                            // Notify listener
+                            if (messageListener != null) {
+                                messageListener.onMessageReceived(message);
+                                Log.d("WebSocket", "Notified listener of message from other user");
+                            }
+                        } else {
+                            Log.d("WebSocket", "Ignored message from self");
                         }
                     }
                 } catch (JSONException e) {
