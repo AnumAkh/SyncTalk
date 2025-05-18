@@ -1,23 +1,40 @@
-Real-time Instant Messaging for Android
-SyncTalk is a simple Android messaging application that demonstrates basic networking concepts including WebSockets, HTTP communication, and Firebase integration. This project was developed as a learning exercise to implement fundamental real-time communication techniques.
+# SyncTalk - Real-time Instant Messaging for Android
 
-Features
+**SyncTalk** is a simple Android messaging application that demonstrates basic networking concepts including **WebSockets**, **HTTP communication**, and **Firebase integration**. This project was developed as a learning exercise to implement fundamental real-time communication techniques.
 
-Real-time Messaging: Exchange messages instantly using WebSockets
-Message History: View past conversations stored in Firebase
-Push Notifications: Get notified of new messages when the app is in background
-Image Sharing: Send and receive images in conversations
+---
 
-Technologies Used
+## Features
 
-Android Studio: Primary development environment
-Java: Main programming language
-OkHttp: For WebSocket implementation
-Firebase Realtime Database: For message persistence
-Glitch: For hosting the WebSocket server
+- **Real-time Messaging**: Exchange messages instantly using WebSockets  
+- **Message History**: View past conversations stored in Firebase  
+- **Push Notifications**: Get notified of new messages when the app is in the background  
+- **Image Sharing**: Send and receive images in conversations  
 
-Architecture
+---
+
+## Technologies Used
+
+- **Android Studio**: Primary development environment  
+- **Java**: Main programming language  
+- **OkHttp**: For WebSocket implementation  
+- **Firebase Realtime Database**: For message persistence  
+- **Glitch**: For hosting the WebSocket server  
+
+---
+
+## Architecture
+
 SyncTalk uses a hybrid networking approach:
 
-WebSockets for low-latency real-time message delivery
-Firebase for data persistence and authentication
+- **WebSockets** for low-latency real-time message delivery  
+- **Firebase** for data persistence and authentication  
+
+---
+
+## Getting Started
+
+1. Clone the repository  
+2. Open in Android Studio  
+3. Configure Firebase (add `google-services.json`)  
+4. Run the app on your emulator or physical device  
